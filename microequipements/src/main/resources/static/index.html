@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Équipements IT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        appleDark: '#1c1c1e',
+                        appleCard: '#2c2c2e',
+                        appleBorder: '#38383a',
+                        appleBlue: '#0A84FF'
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #000000; color: #f5f5f7; }
+        .glass-card { background-color: rgba(44, 44, 46, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; }
+        .apple-input { background-color: #1c1c1e; border: 1px solid #38383a; color: #f5f5f7; border-radius: 10px; padding: 10px 14px; transition: all 0.2s ease; }
+        .apple-input:focus { outline: none; border-color: #0A84FF; box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2); }
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.3s ease; }
+        .toast-leave { transform: translateY(10%); opacity: 0; transition: all 0.2s ease-in; }
+
+        /* Modal Style */
+        .modal-bg { background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }
+    </style>
+</head>
+<body class="antialiased min-h-screen p-4 md:p-8 relative">
+
+<div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-3"></div>
+
+<div id="detailsModal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-bg opacity-0 transition-opacity duration-300">
+    <div class="glass-card w-full max-w-lg p-6 transform scale-95 transition-transform duration-300" id="modalContent">
+        <div class="flex justify-between items-center border-b border-appleBorder pb-3 mb-4">
+            <h3 class="text-xl font-semibold text-white">Contexte Technique (ID: <span id="modalId"></span>)</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button>
+        </div>
+        <div class="space-y-3">
+            <p><span class="text-gray-400 text-sm">Nom:</span> <span id="modalNom" class="font-medium text-white ml-2"></span></p>
+            <p><span class="text-gray-400 text-sm">Catégorie:</span> <span id="modalCat" class="bg-gray-800 text-gray-300 px-2 py-1 rounded text-xs ml-2"></span></p>
+            <p><span class="text-gray-400 text-sm">État Actuel:</span> <span id="modalEtat" class="ml-2"></span></p>
+            <div>
+                <span class="text-gray-400 text-sm block mb-1">Description Technique:</span>
+                <div id="modalDesc" class="bg-appleDark p-3 rounded-lg text-sm text-gray-300 border border-appleBorder"></div>
+            </div>
+            <div class="mt-4 p-3 bg-blue-900/20 border border-blue-900/50 rounded-lg">
+                <p class="text-xs text-blue-400">ℹ️ Ces informations sont envoyées au microservice <b>"Affectation et traitement"</b> pour aider les techniciens.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="max-w-7xl mx-auto">
+    <header class="mb-6 text-center">
+        <h1 class="text-3xl md:text-4xl font-semibold tracking-tight text-white">Ressources IT</h1>
+        <p class="mt-2 text-gray-400 text-sm">Microservice Central d'Inventaire (Projet CC)</p>
+    </header>
+
+    <div class="glass-card p-5 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="bg-appleDark p-4 rounded-xl border border-appleBorder"><p class="text-xs text-gray-400">Total Équipements</p><p class="text-2xl font-semibold text-white mt-1" id="statTotal">0</p></div>
+            <div class="bg-appleDark p-4 rounded-xl border border-appleBorder"><p class="text-xs text-gray-400">Opérationnels</p><p class="text-2xl font-semibold text-green-400 mt-1" id="statActif">0</p></div>
+            <div class="bg-appleDark p-4 rounded-xl border border-appleBorder"><p class="text-xs text-gray-400">En Maintenance</p><p class="text-2xl font-semibold text-orange-400 mt-1" id="statMaint">0</p></div>
+            <div class="bg-appleDark p-4 rounded-xl border border-appleBorder"><p class="text-xs text-gray-400">En Panne</p><p class="text-2xl font-semibold text-red-400 mt-1" id="statPanne">0</p></div>
+        </div>
+        <div class="w-full h-2 bg-appleDark rounded-full overflow-hidden flex border border-appleBorder">
+            <div id="barActif" class="h-full bg-green-500 transition-all duration-500" style="width: 0%"></div>
+            <div id="barMaint" class="h-full bg-orange-500 transition-all duration-500" style="width: 0%"></div>
+            <div id="barPanne" class="h-full bg-red-500 transition-all duration-500" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+        <div class="w-full lg:w-1/3 flex flex-col gap-6">
+
+            <div class="glass-card p-6">
+                <h2 class="text-lg font-medium mb-4 text-white">Ajouter un Équipement</h2>
+                <form id="addForm" class="space-y-3">
+                    <input type="text" id="nom" class="apple-input w-full" placeholder="Nom (ex: Routeur Cisco)" required>
+
+                    <div class="flex gap-2">
+                        <select id="categorie" class="apple-input w-full text-gray-300">
+                            <option value="PC">Ordinateur</option>
+                            <option value="Serveur">Serveur</option>
+                            <option value="Réseau">Équipement Réseau</option>
+                            <option value="Imprimante">Imprimante</option>
+                        </select>
+                        <button type="button" onclick="ajouterNouvelleCategorie()" class="px-3 bg-gray-800 border border-appleBorder rounded-lg text-gray-300 hover:text-white" title="Gérer les catégories">+</button>
+                    </div>
+
+                    <textarea id="description" rows="2" class="apple-input w-full" placeholder="Détails techniques..." required></textarea>
+                    <select id="etat" class="apple-input w-full text-gray-300">
+                        <option value="ACTIF">Actif</option>
+                        <option value="EN_MAINTENANCE">En Maintenance</option>
+                        <option value="EN_PANNE">En Panne</option>
+                    </select>
+                    <button type="submit" class="w-full bg-[#0A84FF] hover:bg-blue-500 text-white font-medium py-2 rounded-xl transition-colors mt-2">Créer</button>
+                </form>
+            </div>
+
+            <div class="glass-card p-5 border border-purple-500/30">
+                <h2 class="text-sm font-semibold mb-3 text-purple-400 flex items-center gap-2">
+                    <span>📡</span> Simulation Inter-Microservices
+                </h2>
+                <div class="space-y-3">
+                    <div class="bg-appleDark p-3 rounded-lg border border-appleBorder">
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">De: Déclaration des Incidents</p>
+                        <div class="flex gap-2">
+                            <input type="number" id="simIdCheck" placeholder="ID" class="apple-input w-16 text-xs p-1">
+                            <button onclick="simulerVerificationExistence()" class="flex-1 bg-gray-800 text-xs text-gray-300 rounded hover:bg-gray-700 py-1">Vérifier l'existence</button>
+                        </div>
+                    </div>
+                    <div class="bg-appleDark p-3 rounded-lg border border-appleBorder">
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Vers: Historique & Notif.</p>
+                        <p class="text-xs text-green-400/80">✅ Événements envoyés automatiquement lors du changement d'état.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="w-full lg:w-2/3">
+            <div class="glass-card overflow-hidden h-full">
+                <div class="p-4 border-b border-appleBorder flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <h2 class="text-lg font-medium text-white">Base de données : Équipements</h2>
+                    <input type="text" id="searchInput" onkeyup="filtrerTableau()" class="apple-input text-sm w-full sm:w-64 py-1.5" placeholder="Rechercher...">
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse" id="mainTable">
+                        <thead>
+                        <tr class="bg-appleDark text-xs uppercase text-gray-400">
+                            <th class="p-3 font-medium border-b border-appleBorder">Équipement</th>
+                            <th class="p-3 font-medium border-b border-appleBorder">Catégorie</th>
+                            <th class="p-3 font-medium border-b border-appleBorder">Statut</th>
+                            <th class="p-3 font-medium border-b border-appleBorder text-right">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody id="equipementsTable" class="divide-y divide-appleBorder">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const apiUrl = '/equipements';
+    let tousLesEquipements = [];
+
+    // --- Toasts ---
+    function showNotification(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const isSuccess = type === 'success';
+        toast.className = `toast-enter flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-md shadow-lg text-white text-sm font-medium ${isSuccess ? 'bg-green-900/90 border-green-500' : 'bg-red-900/90 border-red-500'}`;
+        toast.innerHTML = `<span class="text-lg">${isSuccess ? '✅' : '⚠️'}</span> <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => { toast.classList.replace('toast-enter', 'toast-enter-active'); }, 10);
+        setTimeout(() => { toast.classList.replace('toast-enter-active', 'toast-leave'); setTimeout(() => toast.remove(), 300); }, 4000);
+    }
+
+    // --- Gestion des Catégories (Nouveau) ---
+    function ajouterNouvelleCategorie() {
+        const nouvelleCat = prompt("Gestion des catégories : Entrez le nom de la nouvelle catégorie (ex: Base de données)");
+        if(nouvelleCat && nouvelleCat.trim() !== "") {
+            const select = document.getElementById('categorie');
+            const option = document.createElement('option');
+            option.value = nouvelleCat.trim();
+            option.text = nouvelleCat.trim();
+            select.add(option);
+            select.value = option.value;
+            showNotification(`Catégorie "${nouvelleCat}" ajoutée avec succès !`);
+        }
+    }
+
+    // --- Modal Consulter (Nouveau) ---
+    function openDetailsModal(id) {
+        const eq = tousLesEquipements.find(e => e.id === id);
+        if(!eq) return;
+        document.getElementById('modalId').innerText = eq.id;
+        document.getElementById('modalNom').innerText = eq.nom;
+        document.getElementById('modalCat').innerText = eq.categorie;
+        document.getElementById('modalEtat').innerHTML = getStatusBadge(eq.etat);
+        document.getElementById('modalDesc').innerText = eq.description;
+
+        const modal = document.getElementById('detailsModal');
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            modal.classList.remove('opacity-0');
+            document.getElementById('modalContent').classList.remove('scale-95');
+        }, 10);
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('detailsModal');
+        modal.classList.add('opacity-0');
+        document.getElementById('modalContent').classList.add('scale-95');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    // --- Simulateur de Communication (Nouveau) ---
+    async function simulerVerificationExistence() {
+        const id = document.getElementById('simIdCheck').value;
+        if(!id) return alert("Veuillez entrer un ID");
+
+        // Simule l'appel API depuis "Déclaration des incidents"
+        try {
+            const response = await fetch(`${apiUrl}/${id}`);
+            if(response.ok) {
+                const data = await response.json();
+                showNotification(`Réponse à Déclaration Incidents: Équipement existant (${data.nom}) ✅`);
+            } else {
+                showNotification(`Réponse à Déclaration Incidents: Erreur 404 - Équipement introuvable ❌`, 'error');
+            }
+        } catch(e) {
+            showNotification(`API injoignable`, 'error');
+        }
+    }
+
+    // --- Fonctions de base ---
+    function updateStats(equipements) {
+        const total = equipements.length, actifs = equipements.filter(e => e.etat === 'ACTIF').length;
+        const pannes = equipements.filter(e => e.etat === 'EN_PANNE').length, maints = equipements.filter(e => e.etat === 'EN_MAINTENANCE').length;
+        document.getElementById('statTotal').innerText = total; document.getElementById('statActif').innerText = actifs;
+        document.getElementById('statPanne').innerText = pannes; document.getElementById('statMaint').innerText = maints;
+        const t = total === 0 ? 1 : total;
+        document.getElementById('barActif').style.width = `${(actifs / t) * 100}%`;
+        document.getElementById('barMaint').style.width = `${(maints / t) * 100}%`;
+        document.getElementById('barPanne').style.width = `${(pannes / t) * 100}%`;
+    }
+
+    function getStatusBadge(etat) {
+        if(etat === 'ACTIF') return `<span class="px-2 py-1 rounded text-[10px] font-medium bg-green-900/30 text-green-400 border border-green-800">Actif</span>`;
+        if(etat === 'EN_PANNE') return `<span class="px-2 py-1 rounded text-[10px] font-medium bg-red-900/30 text-red-400 border border-red-800">En Panne</span>`;
+        if(etat === 'EN_MAINTENANCE') return `<span class="px-2 py-1 rounded text-[10px] font-medium bg-orange-900/30 text-orange-400 border border-orange-800">Maint.</span>`;
+        return `<span>${etat}</span>`;
+    }
+
+    async function fetchEquipements() {
+        try {
+            const res = await fetch(apiUrl);
+            if (!res.ok) throw new Error();
+            tousLesEquipements = await res.json();
+            updateStats(tousLesEquipements);
+            afficherTableau(tousLesEquipements);
+        } catch (error) {
+            document.getElementById('equipementsTable').innerHTML = `<tr><td colspan="4" class="p-8 text-center text-red-400">Erreur de connexion serveur.</td></tr>`;
+        }
+    }
+
+    function afficherTableau(equipements) {
+        const tbody = document.getElementById('equipementsTable');
+        if (equipements.length === 0) return tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500">Aucun équipement.</td></tr>`;
+        tbody.innerHTML = equipements.map(eq => `
+                <tr class="hover:bg-appleCard/50 transition-colors border-b border-appleBorder/50 last:border-0">
+                    <td class="p-3"><div class="font-medium text-sm text-gray-200">${eq.nom} <span class="text-[10px] text-gray-500">#${eq.id}</span></div></td>
+                    <td class="p-3 text-xs text-gray-400">${eq.categorie}</td>
+                    <td class="p-3">${getStatusBadge(eq.etat)}</td>
+                    <td class="p-3 text-right space-x-1">
+                        <button onclick="openDetailsModal(${eq.id})" class="px-2 py-1 bg-blue-900/20 text-blue-400 rounded text-[10px] hover:bg-blue-900/40 border border-blue-900/50" title="Consulter le contexte">👁️ Détails</button>
+                        <button onclick="changerEtat(${eq.id}, 'EN_PANNE')" class="px-2 py-1 bg-red-900/20 text-red-400 rounded text-[10px] hover:bg-red-900/40 border border-red-900/50">🔴 Panne</button>
+                        <button onclick="changerEtat(${eq.id}, 'ACTIF')" class="px-2 py-1 bg-green-900/20 text-green-400 rounded text-[10px] hover:bg-green-900/40 border border-green-900/50">🟢 Réparer</button>
+                    </td>
+                </tr>`).join('');
+    }
+
+    function filtrerTableau() {
+        const m = document.getElementById('searchInput').value.toLowerCase();
+        afficherTableau(tousLesEquipements.filter(eq => eq.nom.toLowerCase().includes(m) || eq.categorie.toLowerCase().includes(m)));
+    }
+
+    document.getElementById('addForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = this.querySelector('button[type="submit"]'); btn.innerHTML = '...'; btn.disabled = true;
+        try {
+            const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nom: document.getElementById('nom').value, categorie: document.getElementById('categorie').value, description: document.getElementById('description').value, etat: document.getElementById('etat').value })
+            });
+            if (res.ok) { showNotification("Équipement ajouté !"); this.reset(); fetchEquipements(); }
+            else showNotification((await res.json()).erreur || "Erreur", "error");
+        } catch (e) { showNotification("Serveur injoignable.", "error"); }
+        finally { btn.innerHTML = 'Créer'; btn.disabled = false; }
+    });
+
+    async function changerEtat(id, nouvelEtat) {
+        try {
+            const res = await fetch(`${apiUrl}/${id}/etat`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ etat: nouvelEtat }) });
+            if (res.ok) { showNotification(`L'état a changé : ${nouvelEtat}`); fetchEquipements(); }
+            else showNotification((await res.json()).erreur || "Refusé", "error");
+        } catch(e) { showNotification("Erreur", "error"); }
+    }
+
+    fetchEquipements();
+</script>
+</body>
+</html>
